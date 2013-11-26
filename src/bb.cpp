@@ -5,6 +5,8 @@
 #include <seqan/sequence.h>
 #include <seqan/seq_io.h>
 
+#include <seqan/alignment_free.h>
+#include <seqan/alignment_free/kmer_functions.h>
 #include <iostream>
 #include <sstream>
 
@@ -67,27 +69,93 @@ parseCommandLine(Options & options, int argc, char const ** argv)
 }
 
 // --------------------------------------------------------------------------
-// Function loadSequences()
+// Function d2CompareCounts()
 // --------------------------------------------------------------------------
-template <typename TSeqSet, typename TNameSet>
-bool loadSequences(TSeqSet& sequences, 
-                    TNameSet& fastaIDs,
-                    const char *fileName)
+template <typename TValue>
+void
+d2CompareCounts(TValue & result,
+                            String<unsigned> const & kmerCounts1,
+                            String<unsigned> const & kmerCounts2,
+                            AFScore<D2> const & score)
 {
-  MultiFasta multiFasta;
-  if (!open(multiFasta.concat, fileName, OPEN_RDONLY)) return false;
-  AutoSeqFormat format;
-  guessFormat(multiFasta.concat, format); 
-  split(multiFasta, format);
-  unsigned seqCount = length(multiFasta);
-  resize(sequences, seqCount, Exact());
-  resize(fastaIDs, seqCount, Exact());
-  for(unsigned i = 0; i < seqCount; ++i) 
+  typedef typename Iterator<String<unsigned> const>::Type TIteratorInt;
+
+  TIteratorInt it1 = begin(kmerCounts1);
+  TIteratorInt it2 = begin(kmerCounts2);
+
+  result = 0;
+  for (; it1 < end(kmerCounts1); ++it1)
     {
-      assignSeqId(fastaIDs[i], multiFasta[i], format);
-      assignSeq(sequences[i], multiFasta[i], format);
+      result += value(it1) * value(it2);
+      ++it2;
     }
-  return (seqCount > 0);
+}
+
+// --------------------------------------------------------------------------
+// Function computeD2DistanceMatrix()
+// --------------------------------------------------------------------------
+template <typename TStringSet, typename TValue>
+void computeD2DistanceMatrix(Matrix<TValue, 2> & scoreMatrix,
+                           TStringSet const & querySet,
+			   TStringSet const & targetSet,
+                           AFScore<D2> const & score)
+{
+
+  typedef typename Iterator<TStringSet const>::Type               TIteratorSet;
+  typedef typename Iterator<StringSet<String<unsigned> > >::Type  TIteratorSetInt;
+
+  unsigned queryNumber = length(querySet);
+  unsigned targetNumber = length(targetSet);
+
+  StringSet<String<unsigned> > qKmerCounts;
+  StringSet<String<unsigned> > tKmerCounts;
+
+  resize(qKmerCounts, queryNumber);
+  resize(tKmerCounts, targetNumber);
+
+  // Count query kmers
+  TIteratorSetInt itQKmerCounts = begin(qKmerCounts);
+  TIteratorSet itQSeqSet = begin(querySet);
+
+  for (; itQSeqSet < end(querySet); ++itQSeqSet)
+    {
+      countKmers(value(itQKmerCounts), value(itQSeqSet), score.kmerSize);
+      ++itQKmerCounts;
+    }
+
+  // Count target kmers
+  TIteratorSetInt itTKmerCounts = begin(tKmerCounts);
+  TIteratorSet itTSeqSet = begin(targetSet);
+
+  for (; itTSeqSet < end(targetSet); ++itTSeqSet)
+    {
+      countKmers(value(itTKmerCounts), value(itTSeqSet), score.kmerSize);
+      ++itTKmerCounts;
+    }
+
+  // Resize the scoreMatrix
+  setLength(scoreMatrix, 0, queryNumber);
+  setLength(scoreMatrix, 1, targetNumber);
+  resize(scoreMatrix, (TValue) 0);
+
+  // Calculate all pairwise scores and store them in scoreMatrix
+  for (unsigned rowIndex = 0; rowIndex < queryNumber; ++rowIndex)
+    {
+      if(score.verbose)
+        {
+	  std::cout << "\nSequence number " << rowIndex;
+        }
+      for (unsigned colIndex = rowIndex; colIndex < targetNumber; ++colIndex)
+        {
+	  d2CompareCounts(value(scoreMatrix, rowIndex, colIndex), 
+			  tKmerCounts[rowIndex], 
+			  qKmerCounts[colIndex], 
+			  score);
+	  value(scoreMatrix, colIndex, rowIndex) = value(scoreMatrix, 
+							 rowIndex, 
+							 colIndex);  // Copy symmetric entries
+        }
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -107,13 +175,14 @@ int main(int argc, const char *argv[])
   if (res != seqan::ArgumentParser::PARSE_OK)
     return res == seqan::ArgumentParser::PARSE_ERROR;
 
-  // Load the query and target sequences
+  // Load the query sequences
   std::cerr << "Loading query sequences from " << options.query << std::endl;
   seqan::StringSet<seqan::CharString> queryIds;
   seqan::StringSet<seqan::Dna5String> querySeqs;
   seqan::SequenceStream queryStream(options.query.c_str());
   readAll(queryIds, querySeqs, queryStream);
 
+  // Load the target sequences
   std::cerr << "Loading target sequences from " << options.target << std::endl;
   seqan::StringSet<seqan::CharString> targetIds;
   seqan::StringSet<seqan::Dna5String> targetSeqs;
@@ -121,4 +190,16 @@ int main(int argc, const char *argv[])
   readAll(targetIds, targetSeqs, targetStream);
   
   std::cerr << "Sequences loaded" << std::endl;
+
+  // Setup distance matrix
+  Matrix<double, 2> distMatrix;
+  unsigned kmerSize = 5;
+  bool verbose = false;
+  AFScore<D2> myScoreD2(kmerSize, verbose);
+
+  // Compute distances
+  std::cerr << "Computing D2 distances" << std::endl;
+  computeD2DistanceMatrix(distMatrix, querySeqs, targetSeqs, myScoreD2);
+
+  std::cout << distMatrix;
 }
