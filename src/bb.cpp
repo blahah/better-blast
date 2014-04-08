@@ -63,7 +63,7 @@ parseCommandLine(Options & options, int argc, char const ** argv)
     return res;
 
   getArgumentValue(options.query, parser, 0);
-  getArgumentValue(options.target, parser, 0);
+  getArgumentValue(options.target, parser, 1);
   
   return seqan::ArgumentParser::PARSE_OK;
 }
