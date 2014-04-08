@@ -74,9 +74,9 @@ parseCommandLine(Options & options, int argc, char const ** argv)
 template <typename TValue>
 void
 d2CompareCounts(TValue & result,
-                            String<unsigned> const & kmerCounts1,
-                            String<unsigned> const & kmerCounts2,
-                            AFScore<D2> const & score)
+                String<unsigned> const & kmerCounts1,
+                String<unsigned> const & kmerCounts2,
+                AFScore<D2> const & score)
 {
   typedef typename Iterator<String<unsigned> const>::Type TIteratorInt;
 
@@ -84,11 +84,10 @@ d2CompareCounts(TValue & result,
   TIteratorInt it2 = begin(kmerCounts2);
 
   result = 0;
-  for (; it1 < end(kmerCounts1); ++it1)
-    {
-      result += value(it1) * value(it2);
-      ++it2;
-    }
+  for (; it1 < end(kmerCounts1); ++it1) {
+    result += value(it1) * value(it2);
+    ++it2;
+  }
 }
 
 // --------------------------------------------------------------------------
@@ -97,7 +96,7 @@ d2CompareCounts(TValue & result,
 template <typename TStringSet, typename TValue>
 void computeD2DistanceMatrix(Matrix<TValue, 2> & scoreMatrix,
                            TStringSet const & querySet,
-			   TStringSet const & targetSet,
+			                     TStringSet const & targetSet,
                            AFScore<D2> const & score)
 {
 
@@ -117,53 +116,40 @@ void computeD2DistanceMatrix(Matrix<TValue, 2> & scoreMatrix,
   TIteratorSetInt itQKmerCounts = begin(qKmerCounts);
   TIteratorSet itQSeqSet = begin(querySet);
 
-  for (; itQSeqSet < end(querySet); ++itQSeqSet)
-    {
-      countKmers(value(itQKmerCounts), value(itQSeqSet), score.kmerSize);
-      ++itQKmerCounts;
-    }
-
+  for (; itQSeqSet < end(querySet); ++itQSeqSet) {
+    countKmers(value(itQKmerCounts), value(itQSeqSet), score.kmerSize);
+    ++itQKmerCounts;
+  }
   // Count target kmers
   TIteratorSetInt itTKmerCounts = begin(tKmerCounts);
   TIteratorSet itTSeqSet = begin(targetSet);
 
-  for (; itTSeqSet < end(targetSet); ++itTSeqSet)
-    {
-      countKmers(value(itTKmerCounts), value(itTSeqSet), score.kmerSize);
-      ++itTKmerCounts;
-    }
-
+  for (; itTSeqSet < end(targetSet); ++itTSeqSet) {
+    countKmers(value(itTKmerCounts), value(itTSeqSet), score.kmerSize);
+    ++itTKmerCounts;
+  }
   // Resize the scoreMatrix
   setLength(scoreMatrix, 0, queryNumber);
   setLength(scoreMatrix, 1, targetNumber);
   resize(scoreMatrix, (TValue) 0);
 
   // Calculate all pairwise scores and store them in scoreMatrix
-  for (unsigned rowIndex = 0; rowIndex < queryNumber; ++rowIndex)
-    {
-      if(score.verbose)
-        {
-	  std::cout << "\nSequence number " << rowIndex;
-        }
-      for (unsigned colIndex = rowIndex; colIndex < targetNumber; ++colIndex)
-        {
-	  d2CompareCounts(value(scoreMatrix, rowIndex, colIndex), 
-			  tKmerCounts[rowIndex], 
-			  qKmerCounts[colIndex], 
-			  score);
-	  value(scoreMatrix, colIndex, rowIndex) = value(scoreMatrix, 
-							 rowIndex, 
-							 colIndex);  // Copy symmetric entries
-        }
+  for (unsigned rowIndex = 0; rowIndex < queryNumber; ++rowIndex) {
+    if(score.verbose) {
+	    std::cout << "\nSequence number " << rowIndex;
     }
+    for (unsigned colIndex = rowIndex; colIndex < targetNumber; ++colIndex) {
+      d2CompareCounts(value(scoreMatrix, rowIndex, colIndex), qKmerCounts[rowIndex], tKmerCounts[colIndex], score);
+	    value(scoreMatrix, colIndex, rowIndex) = value(scoreMatrix, rowIndex, colIndex);  // Copy symmetric entries
+    }
+  }
 }
 
 // --------------------------------------------------------------------------
 // Function main()
 // --------------------------------------------------------------------------
 
-int main(int argc, const char *argv[])
-{
+int main(int argc, const char *argv[]) {
   // Parse the command line.
   Options options;
 
